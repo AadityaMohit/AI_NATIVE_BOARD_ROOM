@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Boardroom — a panel that debates your decision</title>
+<style>
+  :root {
+    --bg: #0d0f14;
+    --bg-2: #141720;
+    --panel: #171b26;
+    --panel-2: #1d2231;
+    --line: #262c3b;
+    --line-soft: #1f2431;
+    --ink: #eef1f7;
+    --ink-soft: #a7afc0;
+    --ink-faint: #6b7385;
+    --accent: #e0b24d;
+
+    --c-visionary: #f6b545;
+    --c-skeptic: #f4677f;
+    --c-operator: #4fbdf0;
+    --c-contrarian: #b490f7;
+    --c-chair: #45d6a0;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background:
+      radial-gradient(1200px 700px at 50% -10%, #1a1f2e 0%, transparent 60%),
+      var(--bg);
+    color: var(--ink);
+    font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+  .mono { font-family: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace; }
+
+  .wrap { max-width: 920px; margin: 0 auto; padding: 0 20px; }
+
+  header.top { padding: 40px 0 8px; text-align: center; }
+  .kicker { font-size: 12px; letter-spacing: .28em; text-transform: uppercase; color: var(--accent); }
+  h1 {
+    font-size: clamp(30px, 6vw, 46px);
+    letter-spacing: -.03em; margin: 12px 0 10px; font-weight: 700; text-wrap: balance;
+  }
+  .sub { color: var(--ink-soft); max-width: 54ch; margin: 0 auto; font-size: 16px; }
+
+  /* ---- composer ---- */
+  .composer {
+    margin: 30px auto 10px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 16px; padding: 18px; box-shadow: 0 20px 50px rgba(0,0,0,.35);
+  }
+  .composer textarea {
+    width: 100%; resize: vertical; min-height: 58px; background: var(--bg-2);
+    border: 1px solid var(--line); border-radius: 11px; color: var(--ink);
+    font: inherit; font-size: 16px; padding: 13px 15px; outline: none;
+  }
+  .composer textarea::placeholder { color: var(--ink-faint); }
+  .composer textarea:focus { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+  #context { min-height: 40px; font-size: 14px; margin-top: 10px; }
+  .composer-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 13px; flex-wrap: wrap; }
+  .hint { color: var(--ink-faint); font-size: 12.5px; }
+  .go {
+    background: linear-gradient(180deg, #ecc265, var(--accent));
+    color: #1a1406; border: none; border-radius: 10px; padding: 11px 20px;
+    font-weight: 700; font-size: 15px; cursor: pointer; letter-spacing: -.01em;
+    transition: transform .12s ease, filter .12s ease;
+  }
+  .go:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.05); }
+  .go:disabled { opacity: .5; cursor: not-allowed; }
+
+  .examples { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 14px 0 4px; }
+  .ex {
+    background: var(--panel-2); border: 1px solid var(--line); color: var(--ink-soft);
+    font-size: 12.5px; padding: 7px 12px; border-radius: 999px; cursor: pointer;
+    transition: border-color .12s ease, color .12s ease;
+  }
+  .ex:hover { color: var(--ink); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+
+  /* ---- panel seats ---- */
+  .seats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 26px 0 8px; }
+  .seat {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 13px;
+    padding: 14px 12px; text-align: center; position: relative; overflow: hidden;
+    transition: border-color .2s ease, transform .2s ease, box-shadow .2s ease;
+  }
+  .seat .avatar {
+    width: 42px; height: 42px; border-radius: 50%; margin: 0 auto 9px; display: grid;
+    place-items: center; font-weight: 700; font-size: 17px; color: #0d0f14;
+    background: var(--sc);
+  }
+  .seat .nm { font-weight: 650; font-size: 14.5px; letter-spacing: -.01em; }
+  .seat .rl { font-size: 11.5px; color: var(--ink-faint); margin-top: 1px; }
+  .seat.active {
+    border-color: var(--sc);
+    box-shadow: 0 0 0 1px var(--sc), 0 10px 30px -10px var(--sc);
+    transform: translateY(-2px);
+  }
+  .seat.active .avatar { animation: pulse 1.1s ease-in-out infinite; }
+  .seat .status {
+    position: absolute; top: 9px; right: 10px; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--ink-faint); opacity: .4;
+  }
+  .seat.active .status { background: var(--sc); opacity: 1; box-shadow: 0 0 10px var(--sc); }
+  .seat.spoke .status { background: var(--sc); opacity: .7; }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 var(--sc); } 50% { box-shadow: 0 0 0 6px transparent; } }
+
+  /* ---- transcript ---- */
+  #stage { margin: 18px 0 40px; display: flex; flex-direction: column; gap: 14px; }
+  .roundmark {
+    text-align: center; font-size: 11px; letter-spacing: .2em; text-transform: uppercase;
+    color: var(--ink-faint); margin: 8px 0 2px; position: relative;
+  }
+  .roundmark::before, .roundmark::after {
+    content: ""; position: absolute; top: 50%; width: 28%; height: 1px; background: var(--line);
+  }
+  .roundmark::before { left: 0; } .roundmark::after { right: 0; }
+
+  .bubble {
+    background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--sc);
+    border-radius: 0 13px 13px 0; padding: 13px 16px; animation: rise .35s ease both;
+  }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .bubble .who { display: flex; align-items: center; gap: 9px; margin-bottom: 6px; }
+  .bubble .who .av {
+    width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+    font-size: 11px; font-weight: 700; color: #0d0f14; background: var(--sc); flex: none;
+  }
+  .bubble .who .nm { font-weight: 650; font-size: 14px; }
+  .bubble .who .rl { font-size: 11.5px; color: var(--ink-faint); }
+  .bubble .txt { color: var(--ink-soft); font-size: 15px; white-space: pre-wrap; }
+  .bubble .txt .caret { display: inline-block; width: 7px; height: 15px; background: var(--sc);
+    margin-left: 1px; vertical-align: -2px; animation: blink 1s step-end infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* ---- verdict ---- */
+  .verdict {
+    background: linear-gradient(180deg, rgba(69,214,160,.08), transparent), var(--panel);
+    border: 1px solid color-mix(in srgb, var(--c-chair) 40%, var(--line));
+    border-radius: 16px; padding: 20px 22px; animation: rise .4s ease both;
+    box-shadow: 0 20px 50px -20px rgba(69,214,160,.3);
+  }
+  .verdict .vhead { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .verdict .vhead .av {
+    width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center;
+    font-size: 13px; font-weight: 700; color: #0d0f14; background: var(--c-chair);
+  }
+  .verdict .vhead .lbl { font-size: 12px; letter-spacing: .22em; text-transform: uppercase; color: var(--c-chair); }
+  .vrow { padding: 10px 0; border-top: 1px solid var(--line-soft); }
+  .vrow:first-of-type { border-top: none; }
+  .vrow .k { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 3px; }
+  .vrow .v { color: var(--ink); font-size: 15.5px; }
+  .vrow.rec .v { font-size: 18px; font-weight: 650; letter-spacing: -.01em; }
+  .conf { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 10px; border-radius: 999px;
+    background: color-mix(in srgb, var(--c-chair) 20%, transparent); color: var(--c-chair); }
+  .verdict .vraw { color: var(--ink-soft); font-size: 15px; white-space: pre-wrap; }
+  .verdict .caret { display: inline-block; width: 7px; height: 15px; background: var(--c-chair);
+    margin-left: 1px; vertical-align: -2px; animation: blink 1s step-end infinite; }
+
+  .err { text-align: center; color: var(--c-skeptic); font-size: 14px; padding: 14px; }
+  footer { text-align: center; color: var(--ink-faint); font-size: 12.5px; padding: 10px 0 40px; }
+</style>
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <div class="kicker">The Boardroom</div>
+      <h1>Put your decision on the table.</h1>
+      <p class="sub">A panel of four opinionated advisors debates it out loud — opening positions, rebuttals, changed minds — then the Chair delivers a verdict.</p>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div class="composer">
+      <textarea id="decision" placeholder="What decision are you wrestling with? e.g. Should I drop out to work on my startup full-time?"></textarea>
+      <textarea id="context" placeholder="Optional: any context the panel should know (constraints, what you've tried, what matters to you)…"></textarea>
+      <div class="composer-row">
+        <span class="hint">4 advisors · 2 rounds · 1 verdict</span>
+        <button class="go" id="go">Convene the panel</button>
+      </div>
+    </div>
+
+    <div class="examples" id="examples">
+      <button class="ex">Should I drop out to work on my startup full-time?</button>
+      <button class="ex">Do I take the safe job or the risky one with more upside?</button>
+      <button class="ex">Should we rewrite the app or keep patching it?</button>
+      <button class="ex">Is now the right time to move to a new city?</button>
+    </div>
+
+    <div class="seats" id="seats"></div>
+    <div id="stage"></div>
+  </main>
+
+  <footer>Powered by OpenRouter · a live multi-agent debate</footer>
+
+<script>
+const COLORS = {
+  visionary: 'var(--c-visionary)',
+  skeptic: 'var(--c-skeptic)',
+  operator: 'var(--c-operator)',
+  contrarian: 'var(--c-contrarian)',
+  chair: 'var(--c-chair)',
+};
+const initials = (name) => name.split(/\s+/).map(w => w[0]).join('').slice(0,2).toUpperCase();
+
+const els = {
+  decision: document.getElementById('decision'),
+  context: document.getElementById('context'),
+  go: document.getElementById('go'),
+  seats: document.getElementById('seats'),
+  stage: document.getElementById('stage'),
+  examples: document.getElementById('examples'),
+};
+
+let panel = [];
+
+// Build the seats row from the server's roster.
+async function loadPanel() {
+  try {
+    const res = await fetch('/api/panel');
+    const data = await res.json();
+    panel = data.personas;
+    els.seats.innerHTML = '';
+    for (const p of panel) {
+      const seat = document.createElement('div');
+      seat.className = 'seat';
+      seat.id = 'seat-' + p.id;
+      seat.style.setProperty('--sc', COLORS[p.id] || 'var(--accent)');
+      seat.innerHTML =
+        '<span class="status"></span>' +
+        '<div class="avatar">' + initials(p.name) + '</div>' +
+        '<div class="nm">' + p.name + '</div>' +
+        '<div class="rl">' + p.role + '</div>';
+      els.seats.appendChild(seat);
+    }
+  } catch (_) { /* seats are cosmetic; debate still works */ }
+}
+loadPanel();
+
+els.examples.addEventListener('click', (e) => {
+  if (e.target.classList.contains('ex')) {
+    els.decision.value = e.target.textContent;
+    els.decision.focus();
+  }
+});
+
+let running = false;
+els.go.addEventListener('click', start);
+els.decision.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') start();
+});
+
+function setActiveSeat(id) {
+  document.querySelectorAll('.seat').forEach(s => s.classList.remove('active'));
+  if (id) {
+    const seat = document.getElementById('seat-' + id);
+    if (seat) { seat.classList.add('active'); seat.classList.add('spoke'); }
+  }
+}
+
+function addRoundMark(round) {
+  const m = document.createElement('div');
+  m.className = 'roundmark';
+  m.textContent = round === 1 ? 'Opening positions' : 'Rebuttals & second thoughts';
+  els.stage.appendChild(m);
+}
+
+function addBubble({ id, name, role }) {
+  const b = document.createElement('div');
+  b.className = 'bubble';
+  b.style.setProperty('--sc', COLORS[id] || 'var(--accent)');
+  b.innerHTML =
+    '<div class="who"><span class="av">' + initials(name) + '</span>' +
+    '<span class="nm">' + name + '</span><span class="rl">' + role + '</span></div>' +
+    '<div class="txt"></div>';
+  els.stage.appendChild(b);
+  b.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  return b.querySelector('.txt');
+}
+
+function addVerdict() {
+  const v = document.createElement('div');
+  v.className = 'verdict';
+  v.innerHTML =
+    '<div class="vhead"><span class="av">' + initials('The Chair') + '</span>' +
+    '<span class="lbl">The verdict</span></div><div class="vbody"><span class="vraw"></span></div>';
+  els.stage.appendChild(v);
+  v.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  return v.querySelector('.vbody');
+}
+
+// Turn the Chair's labelled prose into structured rows.
+function renderVerdict(container, raw) {
+  const grab = (label, next) => {
+    const re = new RegExp(label + '\\s*:?\\s*([\\s\\S]*?)(?=' + (next ? next + '\\s*:' : '$') + ')', 'i');
+    const m = raw.match(re);
+    return m ? m[1].trim().replace(/\n+/g, ' ') : '';
+  };
+  const rec = grab('RECOMMENDATION', 'WHY');
+  const why = grab('WHY', 'WATCH OUT FOR');
+  const watch = grab('WATCH OUT FOR', 'CONFIDENCE');
+  const conf = grab('CONFIDENCE', null);
+  if (!rec && !why) { container.innerHTML = '<span class="vraw">' + escapeHtml(raw) + '</span>'; return; }
+  let html = '';
+  if (rec) html += row('Recommendation', escapeHtml(rec), 'rec');
+  if (why) html += row('Why', escapeHtml(why));
+  if (watch) html += row('Watch out for', escapeHtml(watch));
+  if (conf) {
+    const level = (conf.match(/low|medium|high/i) || [''])[0];
+    html += '<div class="vrow"><div class="k">Confidence</div><div class="v">' +
+      (level ? '<span class="conf">' + level.toUpperCase() + '</span> ' : '') +
+      escapeHtml(conf.replace(new RegExp('^' + level + '[\\s—,.-]*', 'i'), '')) + '</div></div>';
+  }
+  container.innerHTML = html;
+}
+const row = (k, v, cls='') => '<div class="vrow ' + cls + '"><div class="k">' + k + '</div><div class="v">' + v + '</div></div>';
+function escapeHtml(s){ return s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+async function start() {
+  if (running) return;
+  const decision = els.decision.value.trim();
+  if (!decision) { els.decision.focus(); return; }
+  running = true;
+  els.go.disabled = true;
+  els.go.textContent = 'In session…';
+  els.stage.innerHTML = '';
+  document.querySelectorAll('.seat').forEach(s => s.classList.remove('active','spoke'));
+
+  let currentTxt = null;      // element being streamed into
+  let currentIsVerdict = false;
+  let verdictRaw = '';
+  let lastRound = 0;
+
+  const onEvent = (event, data) => {
+    if (event === 'turn_start') {
+      if (data.round && data.round !== lastRound) { addRoundMark(data.round); lastRound = data.round; }
+      setActiveSeat(data.id);
+      currentIsVerdict = false;
+      currentTxt = addBubble(data);
+      currentTxt.innerHTML = '<span class="caret"></span>';
+    } else if (event === 'verdict_start') {
+      setActiveSeat(null);
+      currentIsVerdict = true;
+      verdictRaw = '';
+      currentTxt = addVerdict();
+      currentTxt.innerHTML = '<span class="vraw"></span><span class="caret"></span>';
+    } else if (event === 'delta') {
+      if (!currentTxt) return;
+      if (currentIsVerdict) {
+        verdictRaw += data.text;
+        const span = currentTxt.querySelector('.vraw');
+        if (span) span.textContent = verdictRaw;
+      } else {
+        const caret = currentTxt.querySelector('.caret');
+        const node = document.createTextNode(data.text);
+        currentTxt.insertBefore(node, caret);
+      }
+      currentTxt.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    } else if (event === 'turn_end') {
+      if (currentTxt) {
+        const caret = currentTxt.querySelector('.caret');
+        if (caret) caret.remove();
+        if (currentIsVerdict) renderVerdict(currentTxt, verdictRaw);
+      }
+    } else if (event === 'done') {
+      finish();
+    } else if (event === 'error') {
+      const e = document.createElement('div');
+      e.className = 'err';
+      e.textContent = '⚠ ' + (data.message || 'Something went wrong.');
+      els.stage.appendChild(e);
+      finish();
+    }
+  };
+
+  function finish() {
+    setActiveSeat(null);
+    running = false;
+    els.go.disabled = false;
+    els.go.textContent = 'Convene the panel';
+  }
+
+  try {
+    const res = await fetch('/api/debate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ decision, context: els.context.value.trim() }),
+    });
+    if (!res.ok || !res.body) {
+      const msg = (await res.json().catch(() => null))?.error || 'Request failed.';
+      onEvent('error', { message: msg });
+      return;
+    }
+    // Parse the SSE stream manually (event: / data: lines, blank-line separated).
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const blocks = buffer.split(/\n\n/);
+      buffer = blocks.pop();
+      for (const block of blocks) {
+        const lines = block.split(/\n/);
+        let event = 'message', dataStr = '';
+        for (const line of lines) {
+          if (line.startsWith('event:')) event = line.slice(6).trim();
+          else if (line.startsWith('data:')) dataStr += line.slice(5).trim();
+        }
+        if (!dataStr) continue;
+        let data = {};
+        try { data = JSON.parse(dataStr); } catch (_) {}
+        onEvent(event, data);
+      }
+    }
+  } catch (err) {
+    onEvent('error', { message: err.message || 'Connection lost.' });
+  }
+}
+</script>
+</body>
+</html>

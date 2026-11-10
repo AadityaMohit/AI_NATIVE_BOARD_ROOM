@@ -1,0 +1,10 @@
+# dependencies
+node_modules/
+
+# secrets — never commit real env files (the real key lives only in .env)
+.env
+.env.*
+!.env.example
+
+# logs
+*.log
